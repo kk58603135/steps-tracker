@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>每日步數追蹤表 | 2026/05/18 - 2026/10/31</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<style>
+  * { font-family: ui-sans-serif, system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Segoe UI", Roboto, sans-serif; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  .scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+  .scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .scrollbar::-webkit-scrollbar-track { background: transparent; }
+  /* Mobile card expand animation */
+  .card-detail { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .card-detail.open { max-height: 400px; }
+  /* Larger tap targets on mobile */
+  .mobile-input { font-size: 16px !important; }
+</style>
+</head>
+<body class="bg-[#f6f8fb] text-slate-800 min-h-screen">
+<div class="max-w-[1600px] mx-auto p-3 md:p-6 lg:p-8">
+
+  <!-- Header -->
+  <header class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4 md:mb-6">
+    <div>
+      <h1 class="text-xl md:text-3xl font-bold tracking-tight text-slate-900">每日步數追蹤表</h1>
+      <p class="text-slate-500 text-xs md:text-sm mt-1">2026/05/18 ～ 2026/10/31 ｜ 每日目標 <span class="font-semibold text-slate-700">8,000</span> 步</p>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="btn-today" class="px-3 py-2 text-sm font-medium bg-slate-900 text-white rounded-xl active:scale-[0.97] transition">跳至今日</button>
+      <button id="btn-export" class="px-3 py-2 text-sm font-medium bg-white border border-slate-200 rounded-xl active:scale-[0.97] transition">匯出 CSV</button>
+      <button id="btn-clear" class="px-3 py-2 text-sm font-medium bg-white border border-slate-200 rounded-xl text-rose-600 active:scale-[0.97] transition">清除資料</button>
+    </div>
+  </header>
+
+  <!-- Chart -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-5 mb-4 md:mb-6">
+    <div class="flex items-center justify-between mb-3 md:mb-4">
+      <div>
+        <h2 class="text-sm md:text-base font-semibold text-slate-800">累積步數進度圖</h2>
+        <p class="text-xs text-slate-400 mt-0.5">目標累積 vs 實際累積</p>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-0.5 bg-slate-300 rounded"></span><span class="text-slate-500">目標</span></span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-0.5 bg-teal-500 rounded"></span><span class="text-slate-500">實際</span></span>
+      </div>
+    </div>
+    <div style="height:300px;position:relative;">
+      <canvas id="progress-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Summary Cards Row 1 -->
+  <section class="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-3">
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">總目標</div>
+      <div class="text-lg md:text-2xl font-semibold mt-1 tabular-nums">1,336,000</div>
+      <div class="text-xs text-slate-400 mt-0.5">167 天 × 8,000</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">已完成</div>
+      <div id="total-done" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-teal-600">0</div>
+      <div class="text-xs text-slate-400 mt-0.5">累計步數</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">總剩餘</div>
+      <div id="total-remaining" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-amber-600">1,336,000</div>
+      <div class="text-xs text-slate-400 mt-0.5">距目標</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">整體達成率</div>
+      <div id="overall-rate" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums">0.0%</div>
+      <div class="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div id="progress-bar" class="h-full w-0 bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-500"></div>
+      </div>
+    </div>
+    <div class="col-span-2 md:col-span-1 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-2xl p-3 md:p-4 shadow-sm text-white">
+      <div class="text-xs text-indigo-100">本週補足目標</div>
+      <div id="week-catchup" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums">0</div>
+      <div id="week-catchup-text" class="text-xs text-indigo-100 mt-0.5">距週目標 56,000</div>
+    </div>
+  </section>
+  
+
+  <!-- Today + Countdown Cards Row 2 -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 mb-3">
+    <div class="bg-gradient-to-br from-rose-500 to-orange-400 rounded-2xl p-3 md:p-4 shadow-sm text-white flex items-center justify-between">
+      <div>
+        <div class="text-xs text-rose-100">距活動結束</div>
+        <div id="days-to-end" class="text-2xl md:text-3xl font-bold mt-1 tabular-nums">—</div>
+        <div class="text-xs text-rose-100 mt-0.5">天（含今日）</div>
+      </div>
+      <div class="text-right">
+        <div class="text-xs text-rose-100">今日起每天需走</div>
+        <div id="needed-per-day-from-today" class="text-2xl md:text-3xl font-bold mt-1 tabular-nums">—</div>
+        <div class="text-xs text-rose-100 mt-0.5">步／天</div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+      <div>
+        <div class="text-xs text-slate-500">今日尚未輸入步數</div>
+        <div id="today-steps-display" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-slate-400">未記錄</div>
+        <div id="today-date-display" class="text-xs text-slate-400 mt-0.5">今日日期</div>
+      </div>
+      <div class="text-right">
+        <div class="text-xs text-slate-500">今日還需走</div>
+        <div id="today-daily-remain" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-rose-500">8,000</div>
+        <div class="text-xs text-slate-400 mt-0.5">步才達今日目標</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Weekly Steps Cards Row 3 -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">本週已走</div>
+      <div id="week-steps-done" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-teal-600">0</div>
+      <div id="week-steps-label" class="text-xs text-slate-400 mt-0.5">本週累計步數</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">本週目標</div>
+      <div id="week-steps-target" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-slate-700">56,000</div>
+      <div id="week-steps-range" class="text-xs text-slate-400 mt-0.5">本週區間</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">本週剩餘</div>
+      <div id="week-steps-remain" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-amber-600">56,000</div>
+      <div class="text-xs text-slate-400 mt-0.5">距週目標</div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+      <div class="text-xs text-slate-500">本週每日需達</div>
+      <div id="week-daily-needed" class="text-lg md:text-2xl font-semibold mt-1 tabular-nums text-slate-700">—</div>
+      <div id="week-days-left-label" class="text-xs text-slate-400 mt-0.5">本週剩餘天數</div>
+    </div>
+  </section>
+
+  <!-- Info bar (desktop only) -->
+  <div class="hidden md:flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mb-3 px-1">
+    <span>週 1：2026/05/18–05/23 (6天，目標 48,000)</span>
+    <span>週 2 起：每週 7 天，目標 56,000</span>
+    <span>·</span>
+    <span>輸入「當日實測」自動計算（支援 6 位數）</span>
+    <span>·</span>
+    <span>「今日剩餘」= 8,000 − 當日實測，達標後顯示已達標</span>
+  </div>
+
+  <!-- DESKTOP TABLE (hidden on mobile) -->
+  <div id="desktop-table" class="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+    <div class="overflow-x-auto scrollbar">
+      <table class="w-full text-[13px] md:text-sm min-w-[1440px]">
+        <thead class="bg-slate-50/80 backdrop-blur sticky top-0 z-10 border-b border-slate-200">
+          <tr class="text-slate-600">
+            <th class="text-left font-medium px-3 py-2.5 whitespace-nowrap">日期</th>
+            <th class="text-center font-medium px-2 py-2.5">週別</th>
+            <th class="text-center font-medium px-2 py-2.5">週區間</th>
+            <th class="text-right font-medium px-2 py-2.5 whitespace-nowrap">每日目標</th>
+            <th class="text-center font-medium px-2 py-2.5 w-[120px]">當日實測</th>
+            <th class="text-center font-medium px-2 py-2.5">達成率</th>
+            <th class="text-right font-medium px-2 py-2.5 whitespace-nowrap bg-teal-50 text-teal-700">今日剩餘</th>
+            <th class="text-right font-medium px-2 py-2.5">累計</th>
+            <th class="text-right font-medium px-2 py-2.5">週累計</th>
+            <th class="text-right font-medium px-2 py-2.5">週目標</th>
+            <th class="text-right font-medium px-2 py-2.5">週剩餘</th>
+            <th class="text-right font-medium px-2 py-2.5">總剩餘</th>
+            <th class="text-right font-medium px-2 py-2.5">剩餘天數</th>
+            <th class="text-right font-medium px-2 py-2.5">目標%</th>
+            <th class="text-right font-medium px-3 py-2.5">每日需達</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-desktop" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MOBILE CARD LIST (hidden on desktop) -->
+  <div id="mobile-cards" class="md:hidden space-y-2"></div>
+
+  <footer class="text-center text-xs text-slate-400 mt-4 pb-8">
+    資料僅儲存於本機瀏覽器。建議定期匯出備份。
+  </footer>
+</div>
+
+<script>
+const DAILY_GOAL = 8000;
+const TOTAL_GOAL = 1336000;
+const START = new Date('2026-05-18T00:00:00');
+const END = new Date('2026-10-31T00:00:00');
+const WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+function fmt(n){ return n.toLocaleString('en-US'); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function dateStr(d){ return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`; }
+function md(d){ return `${pad(d.getMonth()+1)}/${pad(d.getDate())}`; }
+function localDateStr(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function todayLocalStr(){ return localDateStr(new Date()); }
+
+let dates = [];
+(function buildDates(){
+  let cur = new Date(START);
+  let weekNum = 1;
+  let weekStart = new Date('2026-05-18');
+  let weekEnd = new Date('2026-05-23');
+  while(cur <= END){
+    if(cur > weekEnd){
+      weekNum++;
+      weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() + 1);
+      weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      if(weekEnd > END) weekEnd = new Date(END);
+    }
+    dates.push({
+      d: new Date(cur),
+      week: weekNum,
+      weekStart: new Date(weekStart),
+      weekEnd: new Date(weekEnd),
+      weekTarget: weekNum === 1 ? 48000 : 56000
+    });
+    cur.setDate(cur.getDate() + 1);
+  }
+})();
+
+function getDefaultData(){
+  const data = {};
+  for(let d = new Date('2026-05-18'); d <= new Date('2026-05-30'); d.setDate(d.getDate() + 1)){
+    const key = localDateStr(d);
+    data[key] = d.getDate() === 30 ? 9056 : 9050;
+  }
+  return data;
+}
+
+function loadSaved(){
+  try {
+    const raw = localStorage.getItem('steps2026');
+    if(raw === null) return getDefaultData();
+    return JSON.parse(raw || '{}');
+  } catch { return getDefaultData(); }
+}
+
+function saveData(obj){
+  try { localStorage.setItem('steps2026', JSON.stringify(obj)); } catch {}
+}
+
+function getCurrentWeek(){
+  const todayKey = todayLocalStr();
+  const idx = dates.findIndex(x => localDateStr(x.d) === todayKey);
+  if(idx >= 0) return dates[idx].week;
+  return dates[0].week;
+}
+
+function isMobile(){
+  return window.innerWidth < 768;
+}
+
+// ─── SHARED INPUT VALUES ────────────────────────────────────────────────────
+// Single source of truth: stepValues[key] = number
+let stepValues = {};
+
+function getStepValue(key){ return stepValues[key] || 0; }
+function hasStepValue(key){ return key in stepValues; }
+
+function setStepValue(key, val){
+  if(val === '' || val === null || isNaN(val)){
+    delete stepValues[key];
+  } else {
+    stepValues[key] = parseInt(val) || 0;
+  }
+  // Sync all inputs with this key
+  document.querySelectorAll(`[data-key="${key}"]`).forEach(el => {
+    if(el !== document.activeElement){
+      el.value = key in stepValues ? stepValues[key] : '';
+    }
+  });
+  saveData(stepValues);
+  updateAll();
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function init(){
+  const saved = loadSaved();
+  stepValues = {};
+  for(const [k,v] of Object.entries(saved)){
+    stepValues[k] = v;
+  }
+
+  const todayKey = todayLocalStr();
+  buildDesktopTable(todayKey);
+  buildMobileCards(todayKey);
+  updateAll();
+  initChart();
+
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    if(confirm('確定要清除所有已輸入的步數嗎？')) {
+      stepValues = {};
+      saveData({});
+      document.querySelectorAll('.step-input').forEach(i => i.value = '');
+      updateAll();
+    }
+  });
+  document.getElementById('btn-export').addEventListener('click', exportCSV);
+  document.getElementById('btn-today').addEventListener('click', () => {
+    const idx = dates.findIndex(x => localDateStr(x.d) === todayKey);
+    const id = isMobile() ? `mcard-${idx >= 0 ? idx : 0}` : `row-${idx >= 0 ? idx : 0}`;
+    const target = document.getElementById(id);
+    if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+// ─── DESKTOP TABLE ───────────────────────────────────────────────────────────
+function buildDesktopTable(todayKey){
+  const tbody = document.getElementById('tbody-desktop');
+  let html = '';
+  dates.forEach((item, i) => {
+    const d = item.d;
+    const key = localDateStr(d);
+    const val = key in stepValues ? stepValues[key] : '';
+    const isToday = key === todayKey;
+    const rowBg = item.week % 2 === 0 ? 'bg-slate-50/60' : 'bg-white';
+    const weekInterval = `${md(item.weekStart)}-${md(item.weekEnd)}`;
+    html += `<tr id="row-${i}" class="${rowBg} hover:bg-teal-50/50 transition-colors ${isToday ? 'outline outline-2 outline-teal-500 outline-offset-[-2px]' : ''}">
+      <td class="px-3 py-[7px] whitespace-nowrap">
+        <span class="font-medium text-slate-800">${dateStr(d)}</span>
+        <span class="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-md ${[0,6].includes(d.getDay()) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}">週${WEEKDAYS[d.getDay()]}</span>
+      </td>
+      <td class="text-center px-2 py-[7px] text-slate-600">W${item.week}</td>
+      <td class="text-center px-2 py-[7px] text-[12px] text-slate-500">${weekInterval}</td>
+      <td class="text-right px-2 py-[7px] text-slate-500 tabular-nums">8,000</td>
+      <td class="px-2 py-[5px]">
+        <input type="number" inputmode="numeric" min="0" max="999999" data-idx="${i}" data-key="${key}" class="step-input w-[110px] bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition" placeholder="0" value="${val}">
+      </td>
+      <td class="rate-${i} text-center px-2 py-[7px] text-slate-400">-</td>
+      <td class="daily-remain-${i} text-right px-2 py-[7px] tabular-nums font-medium bg-teal-50/40">-</td>
+      <td class="cumulative-${i} text-right px-2 py-[7px] tabular-nums font-medium text-slate-800">0</td>
+      <td class="week-cum-${i} text-right px-2 py-[7px] tabular-nums">0</td>
+      <td class="text-right px-2 py-[7px] tabular-nums text-slate-500">${fmt(item.weekTarget)}</td>
+      <td class="week-remain-${i} text-right px-2 py-[7px] tabular-nums">0</td>
+      <td class="total-remain-${i} text-right px-2 py-[7px] tabular-nums">0</td>
+      <td class="days-left-${i} text-right px-2 py-[7px] tabular-nums text-slate-500">0</td>
+      <td class="target-pct-${i} text-right px-2 py-[7px] tabular-nums">0.0%</td>
+      <td class="daily-needed-${i} text-right px-3 py-[7px] tabular-nums text-slate-600">-</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  tbody.querySelectorAll('.step-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/[^\d]/g, '').slice(0,6);
+      setStepValue(inp.dataset.key, inp.value);
+    });
+  });
+}
+
+// ─── MOBILE CARDS ────────────────────────────────────────────────────────────
+function buildMobileCards(todayKey){
+  const container = document.getElementById('mobile-cards');
+  let html = '';
+  dates.forEach((item, i) => {
+    const d = item.d;
+    const key = localDateStr(d);
+    const val = key in stepValues ? stepValues[key] : '';
+    const isToday = key === todayKey;
+    const isWeekend = [0,6].includes(d.getDay());
+    const weekInterval = `${md(item.weekStart)}-${md(item.weekEnd)}`;
+    html += `
+    <div id="mcard-${i}" class="bg-white rounded-2xl shadow-sm border ${isToday ? 'border-teal-400 ring-2 ring-teal-400' : 'border-slate-100'} overflow-hidden">
+      <!-- Card Header: tap to expand -->
+      <div class="mcard-header flex items-center justify-between px-4 py-3 cursor-pointer select-none active:bg-slate-50" data-idx="${i}">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-slate-800 text-sm">${dateStr(d)}</span>
+          <span class="text-[11px] px-1.5 py-0.5 rounded-md ${isWeekend ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}">週${WEEKDAYS[d.getDay()]}</span>
+          <span class="text-[11px] text-slate-400">W${item.week}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="mcard-rate-${i} text-xs text-slate-400">-</span>
+          <svg class="mcard-chevron-${i} w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+      </div>
+      <!-- Steps input row (always visible) -->
+      <div class="px-4 pb-3 flex items-center gap-3">
+        <div class="flex-1">
+          <div class="text-[11px] text-slate-400 mb-1">當日實測步數</div>
+          <input type="number" inputmode="numeric" min="0" max="999999"
+            data-idx="${i}" data-key="${key}"
+            class="step-input mobile-input w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-right text-base tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition"
+            placeholder="0" value="${val}">
+        </div>
+        <div class="text-right">
+          <div class="text-[11px] text-slate-400 mb-1">今日剩餘</div>
+          <div class="mcard-remain-${i} text-base font-semibold tabular-nums text-rose-500">8,000</div>
+        </div>
+      </div>
+      <!-- Expandable details -->
+      <div class="card-detail mcard-detail-${i} border-t border-slate-100">
+        <div class="grid grid-cols-3 gap-0 divide-x divide-slate-100 px-0 py-2">
+          <div class="text-center px-2 py-1">
+            <div class="text-[10px] text-slate-400">累計</div>
+            <div class="mcard-cum-${i} text-xs font-semibold tabular-nums text-slate-700 mt-0.5">0</div>
+          </div>
+          <div class="text-center px-2 py-1">
+            <div class="text-[10px] text-slate-400">週累計</div>
+            <div class="mcard-wcum-${i} text-xs font-semibold tabular-nums text-slate-700 mt-0.5">0</div>
+          </div>
+          <div class="text-center px-2 py-1">
+            <div class="text-[10px] text-slate-400">週剩餘</div>
+            <div class="mcard-wrem-${i} text-xs font-semibold tabular-nums text-rose-500 mt-0.5">-</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-0 divide-x divide-slate-100 border-t border-slate-100 px-0 py-2">
+          <div class="text-center px-2 py-1">
+            <div class="text-[10px] text-slate-400">總剩餘</div>
+            <div class="mcard-trem-${i} text-xs font-semibold tabular-nums text-amber-600 mt-0.5">-</div>
+          </div>
+          <div class="text-center px-2 py-1">
+            <div class="text-[10px] text-slate-400">目標%</div>
+            <div class="mcard-pct-${i} text-xs font-semibold tabular-nums text-slate-600 mt-0.5">0%</div>
+          </div>
+          <div class="text-center px-2 py-1">
+            <div class="text-[10px] text-slate-400">每日需達</div>
+            <div class="mcard-need-${i} text-xs font-semibold tabular-nums text-slate-600 mt-0.5">-</div>
+          </div>
+        </div>
+        <div class="px-4 pb-2 text-[11px] text-slate-400">W${item.week}：${weekInterval}｜週目標 ${fmt(item.weekTarget)}</div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+
+  // Input events
+  container.querySelectorAll('.step-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/[^\d]/g, '').slice(0,6);
+      setStepValue(inp.dataset.key, inp.value);
+    });
+  });
+
+  // Expand/collapse
+  container.querySelectorAll('.mcard-header').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const i = hdr.dataset.idx;
+      const detail = document.querySelector(`.mcard-detail-${i}`);
+      const chevron = document.querySelector(`.mcard-chevron-${i}`);
+      detail.classList.toggle('open');
+      chevron.style.transform = detail.classList.contains('open') ? 'rotate(180deg)' : '';
+    });
+  });
+}
+
+// ─── UPDATE ALL ───────────────────────────────────────────────────────────────
+function updateAll(){
+  let cum = 0;
+  const weekSums = {};
+  dates.forEach(it => {
+    const v = getStepValue(localDateStr(it.d));
+    cum += v;
+    weekSums[it.week] = (weekSums[it.week] || 0) + v;
+  });
+
+  let runCum = 0;
+  const runWeek = {};
+  const totalDays = dates.length;
+
+  dates.forEach((it, i) => {
+    const key = localDateStr(it.d);
+    const steps = getStepValue(key);
+    const hasInput = hasStepValue(key);
+    runCum += steps;
+    runWeek[it.week] = (runWeek[it.week] || 0) + steps;
+
+    const rate = hasInput ? Math.round(steps / DAILY_GOAL * 100) : null;
+    const rateText = rate !== null ? rate + '%' : '-';
+    const rateColor = rate === null ? 'text-slate-400' : rate >= 100 ? 'text-emerald-600 font-semibold' : rate >= 80 ? 'text-teal-600' : 'text-amber-600';
+
+    const dailyRemain = DAILY_GOAL - steps;
+    const drText = !hasInput ? '-' : dailyRemain <= 0 ? '✓ 已達標' : fmt(dailyRemain);
+    const drColor = !hasInput ? 'text-slate-400' : dailyRemain <= 0 ? 'text-emerald-600' : dailyRemain >= 4000 ? 'text-rose-500' : dailyRemain >= 2000 ? 'text-amber-600' : 'text-teal-600';
+
+    const weekRemain = it.weekTarget - runWeek[it.week];
+    const totalRemain = Math.max(0, TOTAL_GOAL - runCum);
+    const daysLeft = totalDays - i - 1;
+    const targetPct = (runCum / TOTAL_GOAL * 100).toFixed(1) + '%';
+    const need = daysLeft > 0 && totalRemain > 0 ? Math.ceil(totalRemain / daysLeft) : null;
+    const needText = need ? fmt(need) : '-';
+    const needColor = !need ? 'text-slate-400' : need > 9000 ? 'text-rose-600 font-medium' : need > 8000 ? 'text-amber-600' : 'text-slate-600';
+
+    // Desktop
+    const setEl = (cls, text, extraClass) => {
+      const el = document.querySelector(`.${cls}`);
+      if(el){ el.textContent = text; if(extraClass !== undefined) el.className = `${cls} ${extraClass}`; }
+    };
+    setEl(`rate-${i}`, rateText, `text-center px-2 py-[7px] ${rateColor}`);
+    setEl(`daily-remain-${i}`, drText, `text-right px-2 py-[7px] tabular-nums font-medium bg-teal-50/40 ${drColor}`);
+    setEl(`cumulative-${i}`, fmt(runCum));
+    setEl(`week-cum-${i}`, fmt(runWeek[it.week]));
+    const wrEl = document.querySelector(`.week-remain-${i}`);
+    if(wrEl){ wrEl.textContent = fmt(weekRemain); wrEl.className = `week-remain-${i} text-right px-2 py-[7px] tabular-nums ${weekRemain <= 0 ? 'text-emerald-600' : 'text-rose-500'}`; }
+    setEl(`total-remain-${i}`, fmt(totalRemain));
+    setEl(`days-left-${i}`, daysLeft);
+    const tpEl = document.querySelector(`.target-pct-${i}`);
+    if(tpEl){ tpEl.textContent = targetPct; tpEl.className = `target-pct-${i} text-right px-2 py-[7px] tabular-nums ${parseFloat(targetPct) >= 100 ? 'text-emerald-600 font-semibold' : 'text-slate-600'}`; }
+    setEl(`daily-needed-${i}`, needText, `text-right px-3 py-[7px] tabular-nums ${needColor}`);
+
+    // Mobile
+    const mset = (cls, text, extraClass) => {
+      const el = document.querySelector(`.${cls}`);
+      if(el){ el.textContent = text; if(extraClass) el.className = `${cls} ${extraClass}`; }
+    };
+    mset(`mcard-rate-${i}`, rateText, `mcard-rate-${i} text-xs ${rateColor}`);
+    mset(`mcard-remain-${i}`, drText, `mcard-remain-${i} text-base font-semibold tabular-nums ${drColor}`);
+    mset(`mcard-cum-${i}`, fmt(runCum));
+    mset(`mcard-wcum-${i}`, fmt(runWeek[it.week]));
+    const mwrEl = document.querySelector(`.mcard-wrem-${i}`);
+    if(mwrEl){ mwrEl.textContent = fmt(weekRemain); mwrEl.className = `mcard-wrem-${i} text-xs font-semibold tabular-nums ${weekRemain <= 0 ? 'text-emerald-600' : 'text-rose-500'} mt-0.5`; }
+    mset(`mcard-trem-${i}`, fmt(totalRemain));
+    mset(`mcard-pct-${i}`, targetPct);
+    mset(`mcard-need-${i}`, needText, `mcard-need-${i} text-xs font-semibold tabular-nums mt-0.5 ${needColor}`);
+  });
+
+  // Summary cards
+  document.getElementById('total-done').textContent = fmt(cum);
+  document.getElementById('total-remaining').textContent = fmt(Math.max(0, TOTAL_GOAL - cum));
+  const pct = cum / TOTAL_GOAL * 100;
+  document.getElementById('overall-rate').textContent = pct.toFixed(1) + '%';
+  document.getElementById('progress-bar').style.width = Math.min(100, pct) + '%';
+
+  // Today countdown
+  const todayKey2 = todayLocalStr();
+  const todayIdx = dates.findIndex(x => localDateStr(x.d) === todayKey2);
+  const todayD = new Date();
+  document.getElementById('today-date-display').textContent = `${todayD.getFullYear()}/${pad(todayD.getMonth()+1)}/${pad(todayD.getDate())}`;
+  if(todayIdx >= 0){
+    const daysRemaining = dates.length - todayIdx;
+    const totalRemainNow = Math.max(0, TOTAL_GOAL - cum);
+    const neededPerDay = daysRemaining > 0 ? Math.ceil(totalRemainNow / daysRemaining) : 0;
+    document.getElementById('days-to-end').textContent = fmt(daysRemaining);
+    const npd = document.getElementById('needed-per-day-from-today');
+    npd.textContent = totalRemainNow <= 0 ? '已達標' : fmt(neededPerDay);
+    const hasTodayInput = hasStepValue(todayKey2);
+    const todaySteps = getStepValue(todayKey2);
+    const todayDisp = document.getElementById('today-steps-display');
+    const todayRemainEl = document.getElementById('today-daily-remain');
+    if(hasTodayInput){
+      todayDisp.textContent = fmt(todaySteps) + ' 步';
+      todayDisp.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-slate-800';
+      todayDisp.previousElementSibling.textContent = '今日已記錄步數';
+      const rem = DAILY_GOAL - todaySteps;
+      if(rem <= 0){ todayRemainEl.textContent = '✓ 已達標'; todayRemainEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-emerald-500'; }
+      else { todayRemainEl.textContent = fmt(rem); todayRemainEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums ' + (rem >= 4000 ? 'text-rose-500' : rem >= 2000 ? 'text-amber-500' : 'text-teal-500'); }
+    } else {
+      todayDisp.textContent = '未記錄';
+      todayDisp.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-slate-400';
+      todayDisp.previousElementSibling.textContent = '今日尚未輸入步數';
+      todayRemainEl.textContent = '8,000';
+      todayRemainEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-rose-500';
+    }
+  }
+
+  // Week cards
+  const currentWeek = getCurrentWeek();
+  const weekTarget = dates.find(d => d.week === currentWeek)?.weekTarget || 56000;
+  const weekCurrent = weekSums[currentWeek] || 0;
+  const weekRemain = Math.max(0, weekTarget - weekCurrent);
+  document.getElementById('week-catchup').textContent = fmt(weekRemain);
+  document.getElementById('week-catchup-text').textContent = weekRemain <= 0 ? '本週已達標' : `距週目標 ${fmt(weekTarget)}`;
+  const currentWeekDates = dates.filter(d => d.week === currentWeek);
+  const weekStartItem = currentWeekDates[0];
+  const todayKey3 = todayLocalStr();
+  const weekDaysLeft = currentWeekDates.filter(d => localDateStr(d.d) >= todayKey3).length;
+  document.getElementById('week-steps-done').textContent = fmt(weekCurrent);
+  document.getElementById('week-steps-label').textContent = 'W' + currentWeek + ' 累計步數';
+  document.getElementById('week-steps-target').textContent = fmt(weekTarget);
+  document.getElementById('week-steps-range').textContent = weekStartItem ? (md(weekStartItem.weekStart) + '–' + md(weekStartItem.weekEnd)) : '';
+  const weekRemainCard = weekTarget - weekCurrent;
+  const wrCardEl = document.getElementById('week-steps-remain');
+  if(weekRemainCard <= 0){ wrCardEl.textContent = '✓ 已達標'; wrCardEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-emerald-600'; }
+  else { wrCardEl.textContent = fmt(weekRemainCard); wrCardEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums ' + (weekRemainCard > weekTarget * 0.5 ? 'text-rose-500' : 'text-amber-600'); }
+  const wdnEl = document.getElementById('week-daily-needed');
+  document.getElementById('week-days-left-label').textContent = '本週剩餘 ' + weekDaysLeft + ' 天';
+  if(weekRemainCard <= 0){ wdnEl.textContent = '✓ 已達標'; wdnEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-emerald-600'; }
+  else if(weekDaysLeft > 0){ const wdn = Math.ceil(weekRemainCard / weekDaysLeft); wdnEl.textContent = fmt(wdn); wdnEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums ' + (wdn > 9000 ? 'text-rose-600 font-bold' : wdn > 8000 ? 'text-amber-600' : 'text-slate-700'); }
+  else { wdnEl.textContent = '—'; wdnEl.className = 'text-lg md:text-2xl font-semibold mt-1 tabular-nums text-slate-400'; }
+
+  updateChart();
+}
+
+// ─── CHART ────────────────────────────────────────────────────────────────────
+let progressChart = null;
+function initChart(){
+  Chart.register(ChartDataLabels);
+  const ctx = document.getElementById('progress-chart').getContext('2d');
+  const targetData = dates.map((_, i) => (i + 1) * DAILY_GOAL);
+  progressChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates.map((it, i) => {
+        const d = it.d;
+        // X 軸僅在每週首日顯示標籤，以陣列形式使日期在週下方分行顯示
+        const isStart = localDateStr(d) === localDateStr(it.weekStart);
+        return isStart ? [`W${it.week}`, md(d)] : '';
+      }),
+      datasets: [
+        { label: '目標累積', data: targetData, borderColor: '#94a3b8', backgroundColor: 'transparent', borderWidth: 2, borderDash: [6,4], pointRadius: 0, tension: 0, order: 2 },
+        {
+          label: '實際累積',
+          data: new Array(dates.length).fill(null),
+          borderColor: '#0d9488',
+          backgroundColor: 'rgba(13,148,136,0.05)',
+          borderWidth: 3.5,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#0d9488',
+          fill: false,
+          tension: 0.3,
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b', titleColor: '#94a3b8', bodyColor: '#f1f5f9', padding: 10,
+          callbacks: {
+            title: (items) => dateStr(dates[items[0].dataIndex].d),
+            label: (item) => item.raw === null ? null : item.dataset.label + ': ' + (item.raw || 0).toLocaleString('en-US') + ' 步'
+          }
+        },
+        datalabels: {
+          display: function(context) {
+            const actualDataset = context.chart.data.datasets[1];
+            const activeData = actualDataset.data.filter(v => v !== null);
+            const totalActive = activeData.length;
+            if (totalActive === 0) return false;
+            
+            // 實際累積 及 目標 都在當日索引點顯示
+            return context.dataIndex === totalActive - 1;
+          },
+          align: function(context) {
+            return context.datasetIndex === 0 ? 'bottom' : 'top';
+          },
+          anchor: function(context) {
+            return context.datasetIndex === 0 ? 'start' : 'end';
+          },
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderColor: function(context) {
+            return context.datasetIndex === 0 ? '#94a3b8' : '#0d9488';
+          },
+          borderWidth: 1,
+          borderRadius: 4,
+          color: function(context) {
+            return context.datasetIndex === 0 ? '#475569' : '#115e59';
+          },
+          font: {
+            size: 9,
+            weight: 'bold'
+          },
+          offset: 4,
+          formatter: function(value, context) {
+            const prefix = context.datasetIndex === 0 ? '目標: ' : '實際: ';
+            return prefix + value.toLocaleString('en-US');
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            color: '#e2e8f0',
+            lineWidth: 1
+          },
+          ticks: {
+            color: '#64748b',
+            font: { size: 9, weight: '500' },
+            maxRotation: 0,
+            autoSkip: false
+          },
+          afterBuildTicks: function(scale) {
+            scale.ticks = scale.ticks.filter(tick => {
+              const it = dates[tick.value];
+              return it && localDateStr(it.d) === localDateStr(it.weekStart);
+            });
+          }
+        },
+        y: { grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v } }
+      }
+    }
+  });
+}
+
+function updateChart(){
+  if(!progressChart) return;
+  let c = 0, lastIdx = -1;
+  dates.forEach((it, i) => { if(hasStepValue(localDateStr(it.d))) lastIdx = i; });
+  let c2 = 0;
+  const finalData = dates.map((it, i) => {
+    const v = getStepValue(localDateStr(it.d));
+    c2 += v;
+    return i <= lastIdx ? c2 : null;
+  });
+  progressChart.data.datasets[1].data = finalData;
+  progressChart.update('none');
+}
+
+// ─── EXPORT CSV ───────────────────────────────────────────────────────────────
+function exportCSV(){
+  const rows = [['日期','週別','週區間','每日目標','當日實測','達成率','今日剩餘','累計','週累計','週目標','週剩餘','總剩餘','剩餘天數','目標%','每日需達']];
+  let runCum = 0; const runWeek = {};
+  dates.forEach((it, i) => {
+    const key = localDateStr(it.d);
+    const steps = getStepValue(key);
+    const has = hasStepValue(key);
+    runCum += steps;
+    runWeek[it.week] = (runWeek[it.week] || 0) + steps;
+    const rate = has ? Math.round(steps/DAILY_GOAL*100)+'%' : '-';
+    const dr = !has ? '-' : DAILY_GOAL - steps <= 0 ? '已達標' : String(DAILY_GOAL - steps);
+    const totalRemain = Math.max(0, TOTAL_GOAL - runCum);
+    const daysLeft = dates.length - i - 1;
+    const need = daysLeft > 0 && totalRemain > 0 ? Math.ceil(totalRemain/daysLeft) : '-';
+    rows.push([dateStr(it.d),'W'+it.week,`${md(it.weekStart)}-${md(it.weekEnd)}`,'8000',has?steps:'',rate,dr,runCum,runWeek[it.week],it.weekTarget,it.weekTarget-runWeek[it.week],totalRemain,daysLeft,(runCum/TOTAL_GOAL*100).toFixed(1)+'%',need]);
+  });
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '步數追蹤_2026-05-18_至_2026-10-31.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
+</body>
+</html>
